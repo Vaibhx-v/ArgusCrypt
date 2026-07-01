@@ -1,27 +1,23 @@
-from key_manager import generate_salt, derive_key
+from crypto_engine import encrypt_file
 
 
 def main():
 
+    file_path = "test_images/1.jpg"
+
     password = input("Enter Password: ")
 
-    salt = generate_salt()
+    encrypted_file = encrypt_file(
+        file_path,
+        password
+    )
 
-    key = derive_key(password, salt)
+    print("\n========================================")
+    print("Encryption Successful")
+    print("========================================")
 
-    print()
-
-    print("=" * 40)
-    print("Secure Image Tool")
-    print("=" * 40)
-
-    print("Password :", password)
-    print("Salt     :", salt)
-    print("Key      :", key)
-
-    print()
-
-    print("Key Length:", len(key), "bytes")
+    print("Encrypted File:")
+    print(encrypted_file)
 
 
 if __name__ == "__main__":
