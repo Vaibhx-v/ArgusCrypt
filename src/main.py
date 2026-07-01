@@ -1,23 +1,46 @@
-from crypto_engine import encrypt_file
+from crypto_engine import encrypt_file, decrypt_file
 
 
 def main():
 
-    file_path = "test_images/1.jpg"
+    print("=" * 40)
+    print(" Secure Image Tool ")
+    print("=" * 40)
+
+    print("1. Encrypt Image")
+    print("2. Decrypt Image")
+
+    choice = input("\nEnter choice: ")
 
     password = input("Enter Password: ")
 
-    encrypted_file = encrypt_file(
-        file_path,
-        password
-    )
+    if choice == "1":
 
-    print("\n========================================")
-    print("Encryption Successful")
-    print("========================================")
+        file_path = "test_images/1.jpg"
 
-    print("Encrypted File:")
-    print(encrypted_file)
+        encrypted_file = encrypt_file(
+            file_path,
+            password
+        )
+
+        print("\nEncryption Successful!")
+        print(encrypted_file)
+
+    elif choice == "2":
+
+        file_path = "encrypted/1.enc"
+
+        decrypted_file = decrypt_file(
+            file_path,
+            password
+        )
+
+        print("\nDecryption Successful!")
+        print(decrypted_file)
+
+    else:
+
+        print("Invalid choice.")
 
 
 if __name__ == "__main__":

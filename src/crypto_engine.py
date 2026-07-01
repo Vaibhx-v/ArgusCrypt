@@ -11,35 +11,117 @@ def encrypt_file(file_path, password):
     Encrypts a file using AES-256-GCM.
     """
 
-    # Step 1: Read the image
+    # Read image
     data, path = read_file(file_path)
 
-    # Step 2: Generate a random salt
+    # Generate salt and key
     salt = generate_salt()
-
-    # Step 3: Derive a 256-bit AES key
     key = derive_key(password, salt)
 
-    # Step 4: Create AES-GCM object
+    # AES-GCM object
     aes = AESGCM(key)
 
-    # Step 5: Generate a 12-byte nonce
+    # Generate nonce
     nonce = os.urandom(12)
 
-    # Step 6: Encrypt the file bytes
+    # Encrypt data
     encrypted_data = aes.encrypt(
         nonce,
         data,
         None
     )
 
-    # Step 7: Combine everything
-    final_data = salt + nonce + encrypted_data
+    # ---------- Custom File Format ----------
 
-    # Step 8: Output filename
+    magic = b"SIFT"
+
+    version = bytes([1])
+
+    extension = path.suffix.encode()
+
+    extension_length = bytes([len(extension)])
+
+    final_data = (
+        magic
+        + version
+        + extension_length
+        + extension
+        + salt
+        + nonce
+        + encrypted_data
+    )
+
     output_file = f"encrypted/{path.stem}.enc"
 
-    # Step 9: Save encrypted file
     write_file(output_file, final_data)
+
+    return output_file
+
+
+def decrypt_file(file_path, password):
+    """
+    Decrypts a SIFT encrypted file.
+    """
+
+    # Read encrypted file
+    encrypted_data, path = read_file(file_path)
+
+    # Verify magic header
+    if encrypted_data[:4] != b"SIFT":
+        raise ValueError("Invalid encrypted file.")
+
+    # Read version
+    version = encrypted_data[4]
+
+    if version != 1:
+        raise ValueError("Unsupported file version.")
+
+    # Read extension length
+    extension_length = encrypted_data[5]
+
+    # Read extension
+    start = 6
+    end = start + extension_length
+
+    extension = encrypted_data[start:end].decode()
+
+    # Read salt
+    salt_start = end
+    salt_end = salt_start + 16
+
+    salt = encrypted_data[salt_start:salt_end]
+
+    # Read nonce
+    nonce_start = salt_end
+    nonce_end = nonce_start + 12
+
+    nonce = encrypted_data[nonce_start:nonce_end]
+
+    # Remaining data is ciphertext
+    ciphertext = encrypted_data[nonce_end:]
+
+    # Derive key
+    key = derive_key(password, salt)
+
+    # AES object
+    aes = AESGCM(key)
+
+    # Decrypt
+    decrypted_data = aes.decrypt(
+        nonce,
+        ciphertext,
+        None
+    )
+
+    # Restore filename
+    output_file = (
+        f"decrypted/{path.stem}_decrypted{extension}"
+    )
+
+    # Save image
+    write_file(
+        output_file,
+        decrypted_data
+    )
 
     return output_file
