@@ -48,7 +48,7 @@ class OperationController:
         )
 
         self.activity.log(
-            "AES-256 Key Generated"
+            "AES Key Derived"
         )
 
     def encrypting(self):
@@ -59,7 +59,7 @@ class OperationController:
         )
 
         self.activity.log(
-            "Encrypting Image"
+            "Encrypting..."
         )
 
     def saving(self):
@@ -70,7 +70,7 @@ class OperationController:
         )
 
         self.activity.log(
-            "Saving Output File"
+            "Saved Successfully"
         )
 
     def success(self):
