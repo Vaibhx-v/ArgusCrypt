@@ -1,127 +1,161 @@
 import os
+import time
+from datetime import datetime
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from key_manager import generate_salt, derive_key
 from file_handler import read_file, write_file
 
 
+MAGIC_HEADER = b"AGCT"
+VERSION = 1
+ALGORITHM_ID = 1  # 1 = AES-256-GCM
+
+
 def encrypt_file(file_path, password):
     """
-    Encrypts a file using AES-256-GCM.
+    Encrypt a file using AES-256-GCM.
+
+    Returns a dictionary containing encryption metadata.
     """
 
-    # Read image
+    start_time = time.perf_counter()
+
     data, path = read_file(file_path)
 
-    # Generate salt and key
     salt = generate_salt()
     key = derive_key(password, salt)
 
-    # AES-GCM object
-    aes = AESGCM(key)
-
-    # Generate nonce
     nonce = os.urandom(12)
 
-    # Encrypt data
-    encrypted_data = aes.encrypt(
+    aes = AESGCM(key)
+
+    ciphertext = aes.encrypt(
         nonce,
         data,
         None
     )
 
-    # ---------- Custom File Format ----------
-
-    magic = b"SIFT"
-
-    version = bytes([1])
-
     extension = path.suffix.encode()
 
-    extension_length = bytes([len(extension)])
+    extension_length = len(extension).to_bytes(1, "big")
+
+    timestamp = int(time.time()).to_bytes(8, "big")
 
     final_data = (
-        magic
-        + version
-        + extension_length
-        + extension
-        + salt
-        + nonce
-        + encrypted_data
+        MAGIC_HEADER +
+        VERSION.to_bytes(1, "big") +
+        ALGORITHM_ID.to_bytes(1, "big") +
+        timestamp +
+        extension_length +
+        extension +
+        salt +
+        nonce +
+        ciphertext
     )
+
+    os.makedirs("encrypted", exist_ok=True)
 
     output_file = f"encrypted/{path.stem}.enc"
 
     write_file(output_file, final_data)
 
-    return output_file
+    elapsed = round(time.perf_counter() - start_time, 3)
+
+    return {
+        "success": True,
+        "message": "Encryption Successful",
+        "algorithm": "AES-256-GCM",
+        "input_file": str(path),
+        "output_file": output_file,
+        "original_size": len(data),
+        "encrypted_size": len(final_data),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time_taken": elapsed
+    }
 
 
 def decrypt_file(file_path, password):
     """
-    Decrypts a SIFT encrypted file.
+    Decrypt an ArgusCrypt encrypted file.
+
+    Returns a dictionary containing decryption metadata.
     """
 
-    # Read encrypted file
+    start_time = time.perf_counter()
+
     encrypted_data, path = read_file(file_path)
 
-    # Verify magic header
-    if encrypted_data[:4] != b"SIFT":
-        raise ValueError("Invalid encrypted file.")
+    if encrypted_data[:4] != MAGIC_HEADER:
+        raise ValueError("Invalid ArgusCrypt encrypted file.")
 
-    # Read version
     version = encrypted_data[4]
 
-    if version != 1:
+    if version != VERSION:
         raise ValueError("Unsupported file version.")
 
-    # Read extension length
-    extension_length = encrypted_data[5]
+    algorithm = encrypted_data[5]
 
-    # Read extension
-    start = 6
-    end = start + extension_length
+    if algorithm != ALGORITHM_ID:
+        raise ValueError("Unsupported encryption algorithm.")
 
-    extension = encrypted_data[start:end].decode()
+    timestamp_offset = 6
 
-    # Read salt
-    salt_start = end
+    extension_length_offset = timestamp_offset + 8
+
+    extension_length = encrypted_data[extension_length_offset]
+
+    extension_start = extension_length_offset + 1
+    extension_end = extension_start + extension_length
+
+    extension = encrypted_data[extension_start:extension_end].decode()
+
+    salt_start = extension_end
     salt_end = salt_start + 16
 
     salt = encrypted_data[salt_start:salt_end]
 
-    # Read nonce
     nonce_start = salt_end
     nonce_end = nonce_start + 12
 
     nonce = encrypted_data[nonce_start:nonce_end]
 
-    # Remaining data is ciphertext
     ciphertext = encrypted_data[nonce_end:]
 
-    # Derive key
     key = derive_key(password, salt)
 
-    # AES object
     aes = AESGCM(key)
 
-    # Decrypt
-    decrypted_data = aes.decrypt(
-        nonce,
-        ciphertext,
-        None
-    )
+    try:
+        plaintext = aes.decrypt(
+            nonce,
+            ciphertext,
+            None
+        )
 
-    # Restore filename
-    output_file = (
-        f"decrypted/{path.stem}_decrypted{extension}"
-    )
+    except InvalidTag:
+        return {
+            "success": False,
+            "message": "Incorrect password or corrupted file."
+        }
 
-    # Save image
-    write_file(
-        output_file,
-        decrypted_data
-    )
+    os.makedirs("decrypted", exist_ok=True)
 
-    return output_file
+    output_file = f"decrypted/{path.stem}_decrypted{extension}"
+
+    write_file(output_file, plaintext)
+
+    elapsed = round(time.perf_counter() - start_time, 3)
+
+    return {
+        "success": True,
+        "message": "Decryption Successful",
+        "algorithm": "AES-256-GCM",
+        "input_file": str(path),
+        "output_file": output_file,
+        "decrypted_size": len(plaintext),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time_taken": elapsed
+    }
